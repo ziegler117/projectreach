@@ -155,6 +155,13 @@ for f in posix_files posix_net; do
 	$CC -O2 -w -include "$ROOT/port/xbox/xg_darwin_compat.h" -I"$ROOT/port/xbox/compat" -I"$ENGINE/port/linux/src" \
 		-c "$ENGINE/port/linux/src/$f.c" -o "$OBJ/upstream_$f.o"
 done
+# OpenCE 359's MCC package helpers, when the engine has them (XG_ENGINE_MCC).
+rm -f "$OBJ"/upstream_posix_mcc_*.o
+for f in posix_mcc_preview posix_mcc_share; do
+	[ -f "$ENGINE/port/linux/src/$f.c" ] || continue
+	$CC -O2 -w -include "$ROOT/port/xbox/xg_darwin_compat.h" -I"$ROOT/port/xbox/compat" -I"$ENGINE/port/linux/src" \
+		-c "$ENGINE/port/linux/src/$f.c" -o "$OBJ/upstream_$f.o"
+done
 # Remove only this optional dependency's generated objects when switching engines.
 rm -f "$OBJ/upstream_posix_dtls.o" "$OBJ"/mbedtls_*.o
 if [ -f "$ENGINE/port/linux/src/posix_dtls.c" ]; then

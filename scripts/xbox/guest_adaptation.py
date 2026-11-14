@@ -68,6 +68,11 @@ REVIEWED_RENDERERS = {
     # visibility sequence bookkeeping; reversed depth stays desktop-only.
     'fc9deb0b10eaae1d62caedb0710968b4e77e6e16':
         border_sampling.GLES_343_RENDERER_SHA256,
+    # Build359 adds out-of-memory checks, MCC environment shading, a texture
+    # binding kept across render-target creation and a draw-framebuffer reset
+    # before the first present blit. Every HaloPad anchor is unchanged.
+    '1519c65facbb068e44b956da2769198a83a17847':
+        border_sampling.GLES_359_RENDERER_SHA256,
 }
 ENGINE_LOCK = pathlib.Path(__file__).resolve().parents[2] / 'config/xbox-engine.lock.json'
 ENGINE_CHECKOUT = pathlib.Path(__file__).resolve().parents[2] / 'ref/xbox-build/vol/engine'
@@ -119,7 +124,7 @@ SCALE_343_INSERT = b'''\t/* HaloPad's Original/Sharper choice keeps the game's l
 
 
 def scale_recipe(renderer):
-    if renderer == border_sampling.GLES_343_RENDERER_SHA256:
+    if border_sampling.is_gles_343_family(renderer):
         return SCALE_343_ANCHOR, SCALE_343_INSERT
     if border_sampling.is_gles_244_family(renderer):
         return SCALE_244_ANCHOR, SCALE_244_INSERT
@@ -322,6 +327,10 @@ REVIEWED_CAMERA = {
     # the direct-camera guard and first-person selection remain unchanged.
     'fc9deb0b10eaae1d62caedb0710968b4e77e6e16':
         'c132ab5846cc0154ea9ae5656a15437d484aef6e5dec04eb7d8c76eb1ff9f9dc',
+    # Build359 turns the direct camera by the part of a ridden vehicle's yaw not
+    # yet drawn; the Android guard this adaptation removes is unchanged.
+    '1519c65facbb068e44b956da2769198a83a17847':
+        '46bf0c6b79b60e5fd6b01a2ed66414387272d9930dc5826be32168e29ba04bcb',
 }
 CAMERA_ANCHOR = b'#ifdef HALO_ANDROID\n\t(void)local_player_index;\n\treturn observer;\n#else\n'
 CAMERA_REPLACE = (b'#if 0 /* HaloPad: the view turns the frame the finger moves (display.direct_camera) */\n'
@@ -363,14 +372,16 @@ def identity(name=None, revision=None):
     if name in CAMERA_ADAPTATIONS:
         camera = REVIEWED_CAMERA.get(revision) or _latest_hash(revision, CAMERA_SOURCE)
         if not camera:
-            raise ValueError('Direct camera is reviewed only for builds 85, 119, 125, 206, 208, 244, 273, 294 and 343; review render_interpolation.c first')
+            raise ValueError('Direct camera is reviewed only for builds 85, 119, 125, 206, 208, 244, 273, 294, 343 and 359; review render_interpolation.c first')
         recipe += CAMERA_ANCHOR + CAMERA_REPLACE
         result['upstream_camera_sha256'] = camera
     if name in NETWORK_ADAPTATIONS:
         recipe += network_bridge.recipe(newer=border_sampling.is_gles_244_family(renderer),
                                         browser=renderer in (border_sampling.GLES_294_RENDERER_SHA256,
-                                                             border_sampling.GLES_343_RENDERER_SHA256),
-                                        queued=renderer == border_sampling.GLES_343_RENDERER_SHA256)
+                                                             border_sampling.GLES_343_RENDERER_SHA256,
+                                                             border_sampling.GLES_359_RENDERER_SHA256),
+                                        queued=border_sampling.is_gles_343_family(renderer),
+                                        joined=renderer == border_sampling.GLES_359_RENDERER_SHA256)
     if revision not in REVIEWED_RENDERERS and latest_mode():
         result['reviewed'] = False
     result['recipe_sha256'] = hashlib.sha256(recipe).hexdigest()

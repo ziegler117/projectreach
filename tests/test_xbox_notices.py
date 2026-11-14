@@ -83,7 +83,7 @@ class CollectionTests(unittest.TestCase):
         self.put(self.engine, 'LICENSES/CC0-1.0.txt', 'Retained CC0 fixture notice\n')
         self.put(self.engine, 'port/assets/icons/lucide/LICENSE', 'Lucide fixture permission\n')
         self.put(self.engine, 'port/assets/text_filter/README.md', 'MIT License\nCopyright Surge AI fixture\n')
-        for component in ('opus', 'stb_vorbis', 'miniupnpc', 'english-words', 'jsmn', 'gt7_tone_mapping'):
+        for component in ('opus', 'stb_vorbis', 'miniupnpc', 'english-words', 'jsmn', 'gt7_tone_mapping', 'bcdec'):
             self.put(self.engine, f'port/third_party/{component}/{notices.COMPONENTS[component]}',
                      f'{component} fixture permission\n')
         result = self.collect()
@@ -95,7 +95,7 @@ class CollectionTests(unittest.TestCase):
         self.assertIn(b'Retained CC0 fixture notice', text)
         self.assertIn(b'Lucide fixture permission', text)
         self.assertIn(b'Copyright Surge AI fixture', text)
-        for component in ('opus', 'stb_vorbis', 'miniupnpc', 'english-words', 'jsmn', 'gt7_tone_mapping'):
+        for component in ('opus', 'stb_vorbis', 'miniupnpc', 'english-words', 'jsmn', 'gt7_tone_mapping', 'bcdec'):
             self.assertIn(f'{component} fixture permission'.encode(), text)
             source = f'OpenCE/port/third_party/{component}/{notices.COMPONENTS[component]}'
             row = next(row for row in result['components'] if row['source'] == source)

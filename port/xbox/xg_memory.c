@@ -43,6 +43,14 @@ static uint32_t rover = LOW_ALLOC / XG_PAGE;
 static pthread_mutex_t memory_lock = PTHREAD_MUTEX_INITIALIZER;
 static uint32_t image_end = XG_IMAGE_BASE;
 
+/* OpenCE 359's MCC map tags are linked to a fixed guest address. Like
+ * upstream's Android host (port/android/host/host_mcc_memory.c), the default
+ * window stays out of ordinary allocations from the start. */
+#define MCC_TAG_BASE 0x50000000u
+#define MCC_TAG_SIZE 0x04000000u
+static uint32_t mcc_window;
+static int mcc_active;
+
 static uint32_t round_up(uint64_t value) { return (uint32_t)((value + XG_PAGE - 1) & ~(uint64_t)(XG_PAGE - 1)); }
 
 static int in_fixed(uint64_t address, uint64_t size)
@@ -71,6 +79,8 @@ int xg_memory_initialize(void)
 	mark(0, LOW_ALLOC, 1);
 	mark(XG_WINDOW_BASE, XG_WINDOW_SIZE, 1);
 	mark(HIGH_LIMIT, SPAN - HIGH_LIMIT, 1);
+	mark(MCC_TAG_BASE, MCC_TAG_SIZE, 1);
+	mcc_window = MCC_TAG_BASE;
 	if (mmap(G(void *, XG_WINDOW_BASE), XG_WINDOW_SIZE, PROT_READ | PROT_WRITE,
 		MAP_PRIVATE | MAP_ANON | MAP_FIXED, -1, 0) == MAP_FAILED)
 	{
@@ -130,6 +140,74 @@ void xg_unmap(uint32_t address, size_t size)
 	pthread_mutex_lock(&memory_lock);
 	mark(start, length, 0);
 	pthread_mutex_unlock(&memory_lock);
+}
+
+/* ---------- MCC tag memory (host_mcc_memory_reserve/_release)
+ *
+ * One window at a time, at the address the MCC reader asks for: readable and
+ * writable while active, inaccessible and still reserved after release.
+ * Results are the address, zero or a negative Linux errno, as upstream's. */
+
+static int range_free(uint32_t address, uint32_t size)
+{
+	uint32_t first = address / XG_PAGE, index;
+	for (index = first; index < first + size / XG_PAGE; index++)
+		if (page_used[index])
+			return 0;
+	return 1;
+}
+
+int64_t xh_host_mcc_memory_reserve(uint32_t address, uint32_t size)
+{
+	int error = 0;
+	/* upstream's allowed windows, clear of the legacy tag arenas */
+	if ((address & 0xffffu) || size != MCC_TAG_SIZE || address < 0x42000000u || address > 0x70000000u)
+		return -xg_linux_errno(EINVAL);
+	pthread_mutex_lock(&memory_lock);
+	if (mcc_active)
+		error = EBUSY;
+	else
+	{
+		if (mcc_window != address)
+		{
+			if (mcc_window)
+				mark(mcc_window, MCC_TAG_SIZE, 0);
+			mcc_window = 0;
+			if (!range_free(address, MCC_TAG_SIZE))
+				error = EEXIST;
+			else
+			{
+				mark(address, MCC_TAG_SIZE, 1);
+				mcc_window = address;
+			}
+		}
+		if (!error && mmap(G(void *, address), MCC_TAG_SIZE, PROT_READ | PROT_WRITE,
+			MAP_PRIVATE | MAP_ANON | MAP_FIXED, -1, 0) == MAP_FAILED)
+			error = errno;
+		if (!error)
+			mcc_active = 1;
+	}
+	pthread_mutex_unlock(&memory_lock);
+	if (error)
+	{
+		xg_log("mcc memory: cannot reserve guest %08x-%08x (%s)", address, address + MCC_TAG_SIZE, strerror(error));
+		return -xg_linux_errno(error);
+	}
+	return address;
+}
+
+int xh_host_mcc_memory_release(uint32_t address, uint32_t size)
+{
+	int error = 0;
+	pthread_mutex_lock(&memory_lock);
+	if (!mcc_active || mcc_window != address || size != MCC_TAG_SIZE)
+		error = EINVAL;
+	else if (mmap(G(void *, address), MCC_TAG_SIZE, PROT_NONE, MAP_PRIVATE | MAP_ANON | MAP_FIXED, -1, 0) == MAP_FAILED)
+		error = errno;
+	else
+		mcc_active = 0;
+	pthread_mutex_unlock(&memory_lock);
+	return error ? -xg_linux_errno(error) : 0;
 }
 
 /* ---------- the image (an ELF file from upstream's Android build) */

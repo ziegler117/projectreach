@@ -341,6 +341,38 @@ int xh_hostposix_upnp_forward_udp(unsigned short port,
 }
 
 void xh_hostposix_upnp_stop_forwarding_udp(unsigned short port) { (void)port; }
+/* OpenCE 359: shutdown stops further router requests; none are made here. */
+void xh_hostposix_upnp_cancel(void) {}
+
+/* ---------- OpenCE 359 MCC package files (upstream's posix_mcc_*.c) */
+
+#if XG_ENGINE_MCC
+#include <stdio.h>
+
+int posix_mcc_preview_read(const char *, const char *, void *, posix_ulong);
+int posix_mcc_share_path_safe(const char *);
+int posix_mcc_share_open(const char *);
+void posix_mcc_share_close(int);
+int posix_mcc_share_remove(const char *, int);
+
+int xh_hostposix_mcc_preview_read(uint32_t root, uint32_t relative, uint32_t buffer, posix_ulong capacity)
+{ KEEP(posix_mcc_preview_read(GP(root), GP(relative), GP(buffer), capacity)); }
+int xh_hostposix_mcc_share_path_safe(uint32_t path) { KEEP(posix_mcc_share_path_safe(GP(path))); }
+/* Upstream publishes atomically only with Linux's renameat2(RENAME_NOREPLACE)
+ * and refuses elsewhere. Darwin's RENAME_EXCL is the same guarantee: the
+ * download never replaces an existing destination. */
+int xh_hostposix_mcc_share_publish(uint32_t from, uint32_t to)
+{
+	const char *source = GP(from), *destination = GP(to);
+	if (!posix_mcc_share_path_safe(source) || !posix_mcc_share_path_safe(destination))
+		return 0;
+	KEEP(renamex_np(source, destination, RENAME_EXCL) == 0);
+}
+int xh_hostposix_mcc_share_open(uint32_t path) { KEEP(posix_mcc_share_open(GP(path))); }
+void xh_hostposix_mcc_share_close(int descriptor) { posix_mcc_share_close(descriptor); }
+int xh_hostposix_mcc_share_remove(uint32_t path, int directory)
+{ KEEP(posix_mcc_share_remove(GP(path), directory)); }
+#endif
 
 /* ---------- OpenCE 206 WebRTC transport (native Mbed TLS, guest buffers) */
 

@@ -20,6 +20,9 @@ of the Android guest; their exact sources and compile guard are checked below.
 Build343 also filters listings before queueing them. Its dedicated-server
 auto-update checks the protocol before ending a match; that code is likewise
 excluded from the guest, and its exact source is checked separately.
+Build359 sends the client's version in its join request, and the host refuses
+a direct join whose version differs. The request carries the announced
+version, and the host's check uses the same acceptance rule as discovery.
 """
 import hashlib
 import pathlib
@@ -131,6 +134,38 @@ SERVER_ONLY_343 = {
     pathlib.Path('port/linux/src/server_http.c'): (2, '31dabc6990900e1a445cb2b2c1bfac20fef92ab4b8a046cd64031466c7a5e031'),
     pathlib.Path('port/linux/src/server_mode.c'): (2, '9695e0679b57429468e9f6e1350bd38657ac8c11e2f350ecb53645d051e03599'),
 }
+# Build359 adds team switching, vehicle riding and MCC rotation settings to
+# three of them. The same uses remain inside HALO_SERVER_BUILD.
+SERVER_ONLY_359 = {
+    **SERVER_ONLY_343,
+    pathlib.Path('port/linux/game/server_commands.c'): (2, '56312b5fbe2fc130c67c77280e6c5dd3c15267874dd4c9ea613460ff1bc48b0e'),
+    pathlib.Path('port/linux/game/server_director.c'): (2, 'ce6024a59d18384cb399af6d7d924b00238732aaf1778e1b14b4dfeec5fb1df5'),
+    pathlib.Path('port/linux/src/server_http.c'): (2, '353e6feda014f67c51417aef1648fdf8e15f1ba195b6569c768737e2e5ac6cd6'),
+}
+
+# Build359's join request agreement: the client states its version, the host
+# refuses a direct join that differs.
+CLIENT_JOIN = (b'\t\t\t\tjoin_game_request.network_version = HALO_PORT_NETWORK_VERSION;'
+               b' /* port: explicit shared agreement */\n')
+CLIENT_JOIN_REPLACE = b'''#ifdef HALO_ANDROID
+\t\t\t\t{
+\t\t\t\t\t/* HaloPad network policy v1: the version the app's policy announces */
+\t\t\t\t\textern unsigned int host_halopad_network_announce_v1(unsigned int);
+\t\t\t\t\tjoin_game_request.network_version = (word)host_halopad_network_announce_v1(HALO_PORT_NETWORK_VERSION);
+\t\t\t\t}
+#else
+''' + CLIENT_JOIN + b'#endif\n'
+SERVER_JOIN_DEFINE = b'#include "mcc_identity.h" /* port: attach MCC content identity to host settings */\n'
+SERVER_JOIN_DECLARE = b'''#ifdef HALO_ANDROID
+unsigned int host_halopad_network_accepts_v1(unsigned int, unsigned int); /* HaloPad network policy v1 */
+#endif
+'''
+SERVER_JOIN = b'\t\t\tif (join_game_request.network_version != HALO_PORT_NETWORK_VERSION)\n'
+SERVER_JOIN_REPLACE = b'''#ifdef HALO_ANDROID
+\t\t\t/* HaloPad network policy v1: a joiner the app's verified policy accepts */
+\t\t\tif (!host_halopad_network_accepts_v1(HALO_PORT_NETWORK_VERSION, join_game_request.network_version))
+#else
+''' + SERVER_JOIN + b'#endif\n'
 
 # Historical live sites; 294 also has the exact reviewed cases above.
 KNOWN_USES = {CLIENT: 1, SERVER: 2, LOBBY: 3}
@@ -138,9 +173,11 @@ TOKEN = re.compile(rb'\bHALO_PORT_NETWORK_VERSION\b')
 COMMENT = re.compile(rb'/\*.*?\*/|//[^\n]*', re.S)
 
 
-def recipe(newer=False, browser=False, queued=False):
+def recipe(newer=False, browser=False, queued=False, joined=False):
     if queued and not browser:
         raise ValueError('Queued listing intake requires the browser bridge')
+    if joined and not queued:
+        raise ValueError('Join request agreement requires the queued browser bridge')
     original = b''.join((CLIENT_ANCHOR, CLIENT_INSERT, SERVER_ANCHOR, SERVER_REPLACE, LOBBY_DEFINE_ANCHOR,
                      LOBBY_DEFINE, LOBBY_LISTING, LOBBY_LISTING_REPLACE, LOBBY_FILTER,
                      LOBBY_FILTER_REPLACE, IMPORT))
@@ -150,11 +187,14 @@ def recipe(newer=False, browser=False, queued=False):
         original += LOBBY_TOKEN_DEFINE + CLIENT_TELL + CLIENT_INSERT + MENU_DEFINE + LOBBY_DEFINE
         original += b''.join(before + after for before, after in (*LOBBY_SORT_EDITS, *MENU_EDITS))
         original += str(SERVER_MODE_HEADER).encode() + SERVER_MODE_SHA256.encode()
-        server_only = SERVER_ONLY_343 if queued else SERVER_ONLY
+        server_only = SERVER_ONLY_359 if joined else SERVER_ONLY_343 if queued else SERVER_ONLY
         original += b''.join(str(path).encode() + str(count).encode() + digest.encode()
                              for path, (count, digest) in sorted(server_only.items()))
     if queued:
         original += LOBBY_INTAKE_DEFINE + LOBBY_INTAKE + LOBBY_INTAKE_REPLACE
+    if joined:
+        original += (CLIENT_JOIN + CLIENT_JOIN_REPLACE + SERVER_JOIN_DEFINE + SERVER_JOIN_DECLARE +
+                     SERVER_JOIN + SERVER_JOIN_REPLACE)
     return original
 
 
@@ -168,11 +208,15 @@ def check_uses(engine):
     lobby = (engine / LOBBY).read_bytes()
     browser = LOBBY_TOKEN_DEFINE in lobby
     queued = LOBBY_INTAKE_DEFINE in lobby
+    joined = CLIENT_JOIN in (engine / CLIENT).read_bytes()
     known = dict(KNOWN_USES)
     if browser:
         known.update({CLIENT: 2, LOBBY: 7 if queued else 6, MENU: 5})
-        server_only = SERVER_ONLY_343 if queued else SERVER_ONLY
+        server_only = SERVER_ONLY_359 if joined else SERVER_ONLY_343 if queued else SERVER_ONLY
         known.update({path: count for path, (count, _) in server_only.items()})
+        if joined:
+            # the request's version, and the host's check and its log line
+            known.update({CLIENT: 3, SERVER: 4})
         for path, expected in ((SERVER_MODE_HEADER, SERVER_MODE_SHA256),
                                *((path, digest) for path, (_, digest) in server_only.items())):
             if not (engine / path).is_file() or hashlib.sha256((engine / path).read_bytes()).hexdigest() != expected:
@@ -209,11 +253,18 @@ def adapt(path, original):
         return original + IMPORT
     if path == CLIENT:
         result = _replace(original, CLIENT_ANCHOR, CLIENT_ANCHOR + CLIENT_INSERT, 'join check')
-        if code_uses(original) == 2:
+        if code_uses(original) >= 2:
             result = _replace(result, CLIENT_TELL, CLIENT_TELL + CLIENT_INSERT, 'join rejection explanation')
+        if CLIENT_JOIN in original:
+            result = _replace(result, CLIENT_JOIN, CLIENT_JOIN_REPLACE, 'join request version')
         return result
     if path == SERVER:
-        return _replace(original, SERVER_ANCHOR, SERVER_REPLACE, 'LAN advertisement')
+        result = _replace(original, SERVER_ANCHOR, SERVER_REPLACE, 'LAN advertisement')
+        if code_uses(original) == 4:
+            result = _replace(result, SERVER_JOIN_DEFINE, SERVER_JOIN_DEFINE + SERVER_JOIN_DECLARE,
+                              'join admission helper')
+            result = _replace(result, SERVER_JOIN, SERVER_JOIN_REPLACE, 'join admission check')
+        return result
     if path == LOBBY:
         browser = LOBBY_TOKEN_DEFINE in original
         define = LOBBY_TOKEN_DEFINE if browser else LOBBY_DEFINE_ANCHOR

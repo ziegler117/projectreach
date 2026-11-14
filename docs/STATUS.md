@@ -1,5 +1,60 @@
 # HaloPad status
 
+## HaloPad 0.3.16: OpenCE 359
+
+**Upstream review, 2026-11-15:** the latest published OpenCE is
+[build 359](https://github.com/OpenCommunityEdition/OpenCE/releases/tag/build-359),
+`1519c65facbb068e44b956da2769198a83a17847`, network version 44. Unpublished 0.3.16
+had kept OpenCE 343/network 41, so it could not join current OpenCE games. Versions
+42–44 add MCC map admission and package sharing, shared checkpoint/boat/clock
+agreement, vehicle riding, host-marked chat and automatic MCC package offers. A policy
+refresh cannot implement those changes. The 0.3.16 draft now ships 359 together with
+the input-focus, game-window and Show Touch Controls fixes already on `main`.
+
+Before this change, the reviewed adaptation stopped at three places: the renderer's
+unreviewed sampler layout, the network bridge's new uses of the network version, and
+the camera, whose identity depends on the renderer. The changes and their handling:
+
+- **Renderer, shader and camera:** 359 adds out-of-memory checks, MCC environment
+  shading, a texture binding kept across render-target creation and a draw-framebuffer
+  reset before the first present blit. Every HaloPad anchor is unchanged, so 359 joins
+  343's reviewed family by exact hash. The direct camera now also turns by the not yet
+  drawn part of a ridden vehicle's yaw; the Android guard HaloPad removes is unchanged.
+- **Network bridge:** the client now sends its version in the join request and the host
+  refuses a direct join that differs. The request carries the policy's announced
+  version and the host uses the same acceptance rule as discovery, so both remain
+  exact-version without a policy. Three dedicated-server sources changed; their uses
+  remain inside `HALO_SERVER_BUILD` and are pinned by hash.
+- **Native host:** `host_mcc_memory_reserve`/`_release` keep upstream's 64 MiB MCC tag
+  window (guest `0x50000000`) out of ordinary guest allocations and map it on request.
+  Upstream's `posix_mcc_*.c` are compiled for both Apple hosts when present
+  (`XG_ENGINE_MCC`); package publication uses `renamex_np(RENAME_EXCL)`, the same
+  never-replace guarantee upstream gets from Linux's `renameat2`. `posix_upnp_cancel`
+  is a no-op, as HaloPad does not forward ports.
+- **Notices:** 359's `bcdec` texture decoder licence is collected (38 notices).
+
+Candidate validation (working tree on top of `f6357b6`):
+
+- **485 Xbox tests pass** with Apple Python 3.9.6, plus 23 builder-update, 14 installer,
+  display-geometry and the other repository suites. New tests compile the emitted join
+  request/admission code with ASan/UBSan against the production policy, exercise the
+  MCC window in the production allocator, and run the exact 359 renderer/shader/camera
+  adaptation. All 88 historical adaptation identities are byte-identical.
+- The complete adaptation applies to exact build 359 without latest mode and restores
+  every source byte. Fresh builder runs pass for iPhone/iPad (5 m 54 s) and Mac
+  (1 m 34 s, reusing that guest) with the labeled placeholder disc; all nine new host
+  imports are present in the app.
+- **Strict package audits pass** for both 0.3.16/build 1 archives: OpenCE 359,
+  network 44, signatures, all 50 runtime-source hashes, reviewed renderer/camera/
+  shader identities, counted visibility metadata and 38 component notices. Mac/iOS
+  guest code is byte-identical. `prepare_release.py --version 0.3.16` passes.
+- Not yet covered: clean PadMint checks from the final commit, iPad gameplay, MCC
+  maps, vehicle riding and multiplayer against current OpenCE hosts. Final release
+  checks are recorded with the release.
+
+Private packages, logs and the audit receipt are under `generated/opence-359-review/`.
+
+
 ## Xbox input focus fix — 2026-11-09
 
 The [new reply on #31](https://github.com/chrissotraidis/projectreach/issues/31#issuecomment-6721244480)
