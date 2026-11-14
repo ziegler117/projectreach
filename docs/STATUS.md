@@ -2,6 +2,35 @@
 
 ## HaloPad 0.3.16: OpenCE 359
 
+**Prepared for publication, 2026-11-15:** the [v0.3.16 draft](https://github.com/chrissotraidis/projectreach/releases)
+targets `0474ed5`, merging [#51](https://github.com/chrissotraidis/projectreach/pull/51). It is not
+published; publication waits for the owner's TV and controller check on the iPad.
+
+| Clean PadMint check | iPhone/iPad | Mac |
+| --- | --- | --- |
+| Before tagging, final clean checkout `0474ed5` | 270.09 s — pass | 266.18 s — pass |
+| After publication, no checkout supplied | not run yet | not run yet |
+
+- Both used current PadMint main `de14bd3`, Apple Python 3.9.6, separate empty folders and
+  the labeled Xbox-only placeholder disc. PadMint reported no catalog changes.
+- Strict package audits pass for 0.3.16/build 1: OpenCE 359/network 44, signatures, all 50
+  runtime-source hashes, renderer/camera/adaptation identities and 38 notices. Mac/iOS guest
+  code is identical; one diagnostic timestamp byte differs. As since PadMint 0.6.0, the
+  delivered IPA's Info.plist gains PadMint's `padmint-projectreach` launch link after
+  temporary signing, so the audit used the builder's strictly verified app; all 12 files
+  match except that plist entry.
+- Staged public assets are only `HaloPad-v0.3.16-padmint.json` (identical to the commit's
+  recipe) and `SHA256SUMS`; PadMint's release gate passes. They replace the draft's
+  earlier assets.
+- **iPad Pro:** a combined Custom Edition + Xbox 0.3.16/build 2 from `0474ed5` (reusing the
+  7 Nov Custom Edition translation and product ID, since the Custom Edition installer is not
+  on this Mac) was installed in place over 0.3.16/build 1 with the explicit HaloPad profile.
+  All 1,200 data-container files remain at their sizes; only iOS launch snapshots changed,
+  and `Halo-CE-0.3.16-build2.halopad.zip` was added without overwriting anything. Started
+  with the development picker shortcut, it runs OpenCE 359, exact network version 44, at the
+  main menu: 118.7 fps over 30 s, 0 GL errors, no frame-fence fallback. No level, MCC map,
+  vehicle riding, TV, controller or multiplayer session was played.
+
 **Upstream review, 2026-11-15:** the latest published OpenCE is
 [build 359](https://github.com/OpenCommunityEdition/OpenCE/releases/tag/build-359),
 `1519c65facbb068e44b956da2769198a83a17847`, network version 44. Unpublished 0.3.16
@@ -57,9 +86,7 @@ Candidate validation (working tree on top of `f6357b6`):
   network 44, signatures, all 50 runtime-source hashes, reviewed renderer/camera/
   shader identities, counted visibility metadata and 38 component notices. Mac/iOS
   guest code is byte-identical. `prepare_release.py --version 0.3.16` passes.
-- Not yet covered: clean PadMint checks from the final commit, iPad gameplay, MCC
-  maps, vehicle riding and multiplayer against current OpenCE hosts. Final release
-  checks are recorded with the release.
+- Final release checks are recorded above.
 
 Private packages, logs and the audit receipt are under `generated/opence-359-review/`.
 
