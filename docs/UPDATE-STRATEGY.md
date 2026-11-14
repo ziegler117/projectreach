@@ -5,12 +5,13 @@ For the current candidate-selection policy and release procedure, use
 below explain previous experiments; they do not enable public binary delivery
 or replace the clean PadMint and physical-device checks.
 
-**2026-11-07 release:** HaloPad 0.3.15 ships OpenCE build 343
-(`fc9deb0b10eaae1d62caedb0710968b4e77e6e16`), network version 41, replacing
-0.3.14's build 294/network 39. Current network-41 games require the rebuilt app.
-The 0.3.15 source pins 343 and keeps exact-version matching. Final release checks
-are recorded in [STATUS.md](STATUS.md). The policy below still applies: announcing 41
-from an older engine would not implement the new admission and voting messages.
+**2026-11-15 candidate:** HaloPad 0.3.16 pins OpenCE build 359
+(`1519c65facbb068e44b956da2769198a83a17847`), network version 44, replacing
+0.3.15's build 343/network 41. Current network-44 games require the rebuilt app.
+The source keeps exact-version matching, now also for the join request's own
+version. Release checks are recorded in [STATUS.md](STATUS.md). The policy below
+still applies: announcing 44 from an older engine would not implement MCC
+admission, vehicle riding or the other protocol changes.
 
 ## Current decision, 2026-10-27
 

@@ -60,6 +60,7 @@ static void (*p_glBufferSubData)(GLenum, GLintptr, GLsizeiptr, const void *);
 static GLsync (*p_glFenceSync)(GLenum, GLbitfield);
 static void (*p_glDeleteSync)(GLsync);
 static GLenum (*p_glClientWaitSync)(GLsync, GLbitfield, GLuint64);
+static void (*p_glFinish)(void);
 static void (*p_glReadPixels)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *);
 static void helpers_load(void);
 
@@ -175,6 +176,7 @@ static void helpers_load(void)
 	p_glFenceSync = xg_gl_proc("glFenceSync");
 	p_glDeleteSync = xg_gl_proc("glDeleteSync");
 	p_glClientWaitSync = xg_gl_proc("glClientWaitSync");
+	p_glFinish = xg_gl_proc("glFinish");
 	p_glReadPixels = xg_gl_proc("glReadPixels");
 }
 
@@ -246,6 +248,20 @@ void xh_host_gl_buffer_write(uint32_t target, uint32_t offset, uint32_t size, ui
 #define FENCES 8
 static GLsync fences[FENCES];
 
+/* Frame uploads are unsynchronized (above): a slot is reused only after the
+ * GPU finished the frame that last read it. Without a usable fence, finish
+ * queued work instead (upstream's port/android/host/host_gl.c, OpenCE 359). */
+static void finish_frame_without_fence(void)
+{
+	static int reported;
+	if (!reported)
+	{
+		xg_log("GPU: frame fence unavailable or incomplete; finishing queued work before buffer reuse");
+		reported = 1;
+	}
+	p_glFinish();
+}
+
 void xh_host_gl_fence_frame(uint32_t slot)
 {
 	helpers_load();
@@ -254,14 +270,21 @@ void xh_host_gl_fence_frame(uint32_t slot)
 	if (fences[slot])
 		p_glDeleteSync(fences[slot]);
 	fences[slot] = p_glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+	if (!fences[slot])
+		finish_frame_without_fence();
 }
 
 void xh_host_gl_wait_frame(uint32_t slot)
 {
+	GLenum status;
 	helpers_load();
 	if (slot >= FENCES || !fences[slot])
 		return;
-	p_glClientWaitSync(fences[slot], GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000ull);
+	/* at most a second, so a lost context cannot hang the game; a timeout or
+	 * failure does not end the GPU's use of the slot */
+	status = p_glClientWaitSync(fences[slot], GL_SYNC_FLUSH_COMMANDS_BIT, 1000000000ull);
+	if (status != GL_ALREADY_SIGNALED && status != GL_CONDITION_SATISFIED)
+		finish_frame_without_fence();
 	p_glDeleteSync(fences[slot]);
 	fences[slot] = NULL;
 }

@@ -24,6 +24,7 @@ REV244 = '6ec42856d73e258e5a8c7e9cd19161f46d89d0e4'
 REV273 = '7fb941b0b205edb1f7ecbb0aa6c2d7f5b884732d'
 REV294 = '337b05cfdf203e7c3e3d8af0b1b37894c0b5b057'
 REV343 = 'fc9deb0b10eaae1d62caedb0710968b4e77e6e16'
+REV359 = '1519c65facbb068e44b956da2769198a83a17847'
 
 
 class ReviewedRendererTests(unittest.TestCase):
@@ -202,6 +203,51 @@ int main(void) {
                                       input=harness, text=True, capture_output=True)
             self.assertEqual(compiled.returncode, 0, compiled.stderr)
             subprocess.run([str(binary)], check=True, capture_output=True)
+
+    def test_build359_pins_changed_sources_and_keeps_the_prior_recipe(self):
+        with patch.dict(os.environ, {'HALOPAD_XBOX_LATEST': '0'}), \
+             patch.object(guest, '_latest_source', side_effect=AssertionError('must use reviewed inputs')):
+            old = guest.identity('network-policy-v1', REV343)
+            new = guest.identity('network-policy-v1', REV359)
+        self.assertEqual(old['recipe_sha256'], '60ba2a1fb3b1543718f27ae1e409b17779a5b3f834e068a664055e99331839c2')
+        self.assertEqual(new['upstream_renderer_sha256'], guest.border_sampling.GLES_359_RENDERER_SHA256)
+        self.assertEqual(new['upstream_camera_sha256'],
+                         '46bf0c6b79b60e5fd6b01a2ed66414387272d9930dc5826be32168e29ba04bcb')
+        self.assertEqual(guest.border_sampling.shader_hash(new['upstream_renderer_sha256']),
+                         '3131c895e6a7b68ccdf53865f5a6a754642deb777059e52dd723b9fcb828d448')
+        self.assertEqual(guest.scale_recipe(new['upstream_renderer_sha256']),
+                         (guest.SCALE_343_ANCHOR, guest.SCALE_343_INSERT))
+        self.assertNotEqual(new['recipe_sha256'], old['recipe_sha256'])
+        self.assertNotIn('reviewed', new)
+
+    def test_exact359_sources_keep_upstream_fixes_beside_our_edits(self):
+        checkout = pathlib.Path(os.environ.get('HALOPAD_TEST_ENGINE', guest.ENGINE_CHECKOUT))
+        sources = {}
+        for path in (guest.RENDERER, guest.border_sampling.SHADER, guest.CAMERA_SOURCE):
+            result = subprocess.run(['git', '-C', str(checkout), 'show', f'{REV359}:{path}'],
+                                    capture_output=True)
+            if result.returncode:
+                self.skipTest('exact OpenCE359 source unavailable; set HALOPAD_TEST_ENGINE')
+            sources[path] = result.stdout
+        with patch.dict(os.environ, {'XBOX_REV': REV359, 'HALOPAD_XBOX_LATEST': '0'}):
+            renderer = guest.adapted_source(sources[guest.RENDERER], 'network-policy-v1')
+            shader = guest.border_sampling.adapt_shader(sources[guest.border_sampling.SHADER],
+                                                        guest.border_sampling.GLES_359_RENDERER_SHA256)
+            camera = guest.adapted_camera(sources[guest.CAMERA_SOURCE])
+        # 359's binding restorations, allocation checks and MCC shading stay upstream's.
+        for preserved in (b'glBindTexture(GL_TEXTURE_2D, (GLuint)previous_texture);',
+                          b'entry = device_record_new(sizeof(*entry));',
+                          b'key.mcc_bump_attenuation = mcc_environment_shader_active();',
+                          b'map can reach this first blit without a loading-screen draw. */\n'
+                          b'\t\t\tglBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);'):
+            self.assertIn(preserved, renderer)
+        self.assertIn(b'mcc_environment_shader_emit(text);', shader)
+        self.assertIn(b'hp_border_sample(tex%d', shader)
+        self.assertIn(b'vehicle_riding_kept_dyaw(local_player_index)', camera)
+        self.assertIn(guest.CAMERA_REPLACE, camera)
+        for edit in (guest.SCALE_343_INSERT, guest.COUNT_244_REPLACE, guest.WATER_RESTORE,
+                     guest.PRESENT_244_REPLACE, guest.ATOMIC_REPLACE):
+            self.assertIn(edit, renderer)
 
     def test_revision_hash_and_transaction_identity_cannot_be_interchanged(self):
         original = b'/* synthetic reviewed74 */\n' + guest.ANCHOR

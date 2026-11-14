@@ -27,12 +27,22 @@ GLES_294_SHADER_SHA256 = GLES_273_SHADER_SHA256
 # handles desktop reversed depth; GLES keeps the original depth convention.
 GLES_343_RENDERER_SHA256 = '8c274dfe13af0dd9040bc66bfb0e099394ea4e648f2ac6c9ce4edfa10cdd7617'
 GLES_343_SHADER_SHA256 = '75e20e1caaa2c2206e40a11d8ddf2c6cd400d5d49dd5180dc57aefd5822a9e2b'
+# Build359 adds out-of-memory checks, MCC environment shading and two binding
+# restorations; the sampler, border, query, scale and present anchors match 343.
+GLES_359_RENDERER_SHA256 = '206131bd843d542192e59d1064b605b2b73e3fdc649c17dc7b61156a2514a189'
+GLES_359_SHADER_SHA256 = '3131c895e6a7b68ccdf53865f5a6a754642deb777059e52dd723b9fcb828d448'
 
 
 def is_gles_244_family(renderer):
     """Reviewed renderers sharing 244's query, HDR and sampler layout."""
     return renderer in (GLES_244_RENDERER_SHA256, GLES_273_RENDERER_SHA256,
-                        GLES_294_RENDERER_SHA256, GLES_343_RENDERER_SHA256)
+                        GLES_294_RENDERER_SHA256, GLES_343_RENDERER_SHA256,
+                        GLES_359_RENDERER_SHA256)
+
+
+def is_gles_343_family(renderer):
+    """Reviewed renderers with 343's resolution selection and queued browser."""
+    return renderer in (GLES_343_RENDERER_SHA256, GLES_359_RENDERER_SHA256)
 
 
 def is_gles(renderer):
@@ -40,6 +50,8 @@ def is_gles(renderer):
 
 
 def shader_hash(renderer):
+    if renderer == GLES_359_RENDERER_SHA256:
+        return GLES_359_SHADER_SHA256
     if renderer == GLES_343_RENDERER_SHA256:
         return GLES_343_SHADER_SHA256
     if renderer == GLES_294_RENDERER_SHA256:

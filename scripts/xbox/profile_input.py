@@ -20,7 +20,9 @@ REVIEWED = {
               '7b87537be69b4374c940c32409366f49cb6fe6b126abca04508644bc3bb61d56',
               # Build343 adds text input, browser, render policy and Android
               # overlay-device imports; HaloPad implements each on its hosts.
-              'f373b1ba6fc340334bb423f539135cf4e86840d14848786ae3208bdeb6ff1db2'},
+              'f373b1ba6fc340334bb423f539135cf4e86840d14848786ae3208bdeb6ff1db2',
+              # Build359 adds the MCC tag-memory reservation imports.
+              '36634569b466f20f7b5639246d22a54c31eca1734f8f4cfb24dd7234ecec418f'},
     # Build206 only defers the key-repeat clock read until the key is down;
     # input_frame_begin and the preference fields consumed below are unchanged.
     INPUT: {'67177fe1b16ba8e0962afd3423bd705ea6f306a6555c8ab56d3371daeaef5313',
