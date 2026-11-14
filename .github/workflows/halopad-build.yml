@@ -23,7 +23,8 @@ jobs:
   delivery-tests:
     needs: select
     if: needs.select.outputs.build == 'true'
-    runs-on: ubuntu-latest
+    # ruby/setup-ruby has no prebuilt Ruby 3.3.9 for ubuntu-latest (26.04).
+    runs-on: ubuntu-24.04
     env:
       BUNDLE_GEMFILE: tools/testflight/Gemfile
       FASTLANE_SKIP_UPDATE_CHECK: '1'
