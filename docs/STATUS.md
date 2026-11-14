@@ -32,14 +32,23 @@ the camera, whose identity depends on the renderer. The changes and their handli
   never-replace guarantee upstream gets from Linux's `renameat2`. `posix_upnp_cancel`
   is a no-op, as HaloPad does not forward ports.
 - **Notices:** 359's `bcdec` texture decoder licence is collected (38 notices).
+- **Frame fences:** OpenCE 359 fixed its Android host's frame-buffer reuse
+  ([#617](https://github.com/OpenCommunityEdition/OpenCE/pull/617)): a fence wait that
+  timed out or failed was discarded, letting a later unsynchronized upload overwrite
+  vertices still queued for the GPU. HaloPad's own `xg_gl.c` had the same flaw; it now
+  finishes queued work in that case and when a fence cannot be created, logging the
+  first fallback. Upstream links this to multiplayer geometry reports without
+  claiming the sustained Android case fixed; [#45](https://github.com/chrissotraidis/projectreach/issues/45)
+  (geometry missing after joining another match) has not been reproduced here.
 
 Candidate validation (working tree on top of `f6357b6`):
 
-- **485 Xbox tests pass** with Apple Python 3.9.6, plus 23 builder-update, 14 installer,
+- **486 Xbox tests pass** with Apple Python 3.9.6, plus 23 builder-update, 14 installer,
   display-geometry and the other repository suites. New tests compile the emitted join
   request/admission code with ASan/UBSan against the production policy, exercise the
-  MCC window in the production allocator, and run the exact 359 renderer/shader/camera
-  adaptation. All 88 historical adaptation identities are byte-identical.
+  MCC window in the production allocator, run the exact 359 renderer/shader/camera
+  adaptation and drive `xg_gl.c`'s fences through timeouts and failures (the
+  unfixed file fails). All 88 historical adaptation identities are byte-identical.
 - The complete adaptation applies to exact build 359 without latest mode and restores
   every source byte. Fresh builder runs pass for iPhone/iPad (5 m 54 s) and Mac
   (1 m 34 s, reusing that guest) with the labeled placeholder disc; all nine new host

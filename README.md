@@ -178,7 +178,8 @@ Xbox checkpoints may need a level restart after an engine change.
   OpenCE multiplayer: players can stand on and ride moving vehicles, Map Sharing
   offers MCC map packages automatically, and dedicated servers support `!switch`
   team changes. Upstream also fixes Xbox spatial audio, Android multiplayer geometry
-  and several renderer state and out-of-memory cases. HaloPad also reports window
+  and several renderer state and out-of-memory cases; HaloPad's own renderer host
+  gets the matching frame-buffer reuse fix. HaloPad also reports window
   focus so input keeps working on OpenCE's newer engines, sizes the game from its
   own window (Split View, Stage Manager, external displays), and adds **Show Touch
   Controls** to bring touch back while a controller is connected. The PC Custom
